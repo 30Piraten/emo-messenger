@@ -1,19 +1,38 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
-import TheWelcome from './components/TheWelcome.vue'
+import Auth from "./components/FormAuth.vue"
+import { useAccount } from "jazz-vue";
+import { defineComponent, provide } from "vue";
+import { JazzAccountKey } from "@/composables/useJazz";
+import FormAuth from "@/components/FormAuth.vue";
+
+defineComponent({
+  name: "App",
+  components: {
+    FormAuth,
+  },
+
+  setup() {
+    // get Jazz account from provider
+    const account = useAccount();
+
+    // provide account to child components
+    provide(JazzAccountKey, account);
+
+    return {
+      account,
+    };
+  }
+})
+
 </script>
 
 <template>
-  <header>
-    <img alt="Vue logo" class="logo" src="./assets/logo.svg" width="125" height="125" />
-
-    <div class="wrapper">
-      <HelloWorld msg="You did it!" />
-    </div>
-  </header>
-
   <main>
-    <TheWelcome />
+    <div id="app">
+      <FormAuth v-if="account" />
+
+    </div>
+    <Auth />
   </main>
 </template>
 
