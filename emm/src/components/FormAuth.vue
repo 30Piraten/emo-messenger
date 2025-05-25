@@ -1,93 +1,81 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { userData } from "@/validators/userSchema"
-import { useAuthStore } from "@/stores/authStore";
-import bcrypt from "bcrypt"
-import { saveUserToJazz, getUserByUsername } from "@/stores/jazzStorage";
-import { useJazz } from "@/composables/useJazz";
-
-const auth = useAuthStore();
-const { account } = useJazz();
+import { signupUser, loginUser } from "@/auth/authentication";
+import { saveUserProfile, useAuthStore } from "@/stores/authStore";
+import { useRouter } from 'vue-router'
+import { z } from "zod/v4"
 
 // form state
-const username = ref("");
+const email = ref("")
 const password = ref("");
-const formErrors = ref<{ username?: string; password?: string }>({});
+const formErrors = ref<{ email?: string, password?: string; general?: string }>({});
 const mode = ref<"signup" | "login">("signup");
+
+const router = useRouter()
+const authStore = useAuthStore();
 
 const toggleMode = () => {
   mode.value = mode.value === "signup" ? "login" : "signup";
   formErrors.value = {};
 };
 
+const AuthSchema = z.strictObject({
+  email:  z.email({ pattern: z.regexes.html5Email, error: "Enter a valid email address" }),
+  password: z.string().min(6, { error: "Password must be at least 6 characters" }),
+});
+
 const handleSubmit = async (e: Event) => {
   e.preventDefault();
   formErrors.value = {};
 
-  const validateResult = userData.safeParse({
-    username: username.value,
-    password: password.value,
-  });
+  const rr = AuthSchema.safeParse({ email: email.value, password: password.value });
 
-  if (!validateResult.success) {
-    const fieldErrors: typeof formErrors.value = {};
-    validateResult.error.issues.forEach(issues => {
-      const field = issues.path[0] as keyof typeof formErrors.value;
-      fieldErrors[field] = issues.message;
+  if (!rr.success) {
+    rr.error.issues.forEach(err => {
+      if (err.path[0] === "email") formErrors.value.email = err.message;
+      if (err.path[0] === "password") formErrors.value.password = err.message;
     });
-    formErrors.value = fieldErrors;
     return;
   }
 
+  if (Object.keys(formErrors.value).length) return;
+
   try {
-    if (mode.value == "signup") {
-      // hash the password and create the user
-      const hashedPassword = await bcrypt.hash(validateResult.data.password, 10);
-      const userToSave = {
-        username: validateResult.data.username,
-        password: hashedPassword,
-      };
+    const userCredentials = mode.value === "signup"
+      ? await signupUser(email.value, password.value)
+      : await loginUser(email.value, password.value);
 
-      const newUser = await saveUserToJazz(userToSave, account);
-      auth.login(validateResult.data.username);
-      console.log("user signed up:", newUser.username);
+    // persit email to Firestore (opt. extend with displayName)
+    if (mode.value == "signup") await saveUserProfile(userCredentials.uid, email.value)
+    console.log("user profile saved to Firestore")
 
-    } else {
-      // login - verify existing user
-      const existingUser = await getUserByUsername(validateResult.data.username, account);
-
-      if (!existingUser) {
-        formErrors.value.username = "user not found";
-        return;
-      }
-
-      const isPasswordValid = await bcrypt.compare(
-        validateResult.data.password,
-        existingUser.password
-      );
-
-      if (!isPasswordValid) {
-        formErrors.value.password = "invalid password";
-        return;
-      }
-
-      auth.login(validateResult.data.username);
-      console.log("user logged in:", existingUser.username);
-    }
-
-    // clear the form
-    username.value = "";
+    // userCredentials is already a type of user
+    authStore.setUser(userCredentials);
+    email.value = "";
     password.value = "";
 
-  } catch (error) {
-    console.log("authentication error:", error);
-    if (error instanceof Error && error.message.includes("already exists")) {
-      formErrors.value.username = "username already exists"
-    } else {
-      formErrors.value.username = "an error occured. Please try again";
+    // TODO: must redirect to online users
+    // redirection after user sign's up or login
+    router.push("/users")
+
+  } catch (err: any) {
+    console.error(err);
+
+    switch (err.code) {
+      case "auth/email-already-in-use":
+      formErrors.value.email = "Email already in use";
+      break;
+    case "auth/user-not-found":
+      formErrors.value.email = "User not found";
+      break;
+    case "auth/wrong-password":
+      formErrors.value.password = "Incorrect password";
+      break;
+    default:
+      formErrors.value.general = "Something went wrong. Please try again."
     }
-  }
-};
+  };
+}
 </script>
 
 <template>
@@ -95,27 +83,29 @@ const handleSubmit = async (e: Event) => {
   <div class="form-container">
     <form class="form" @submit="handleSubmit">
 
-      <!-- for username -->
-      <label for="username">Username</label>
+      <!-- for email -->
+      <label for="email">Email</label>
       <input
-        id="username"
-        v-model="username"
+        id="email"
+        v-model="email"
         type="text"
-        placeholder="enter your username"
-        :aria-label="username"
-        :aria-invalid="!!formErrors.username"
+        placeholder="your@email.com"
+        :aria-label="email"
+        :aria-invalid="!!formErrors.email"
+        autocomplete="email"
       />
-      <span class="error" v-if="formErrors.username">{{ formErrors.username }}</span>
+      <span class="error" v-if="formErrors.email">{{ formErrors.email }}</span>
 
       <!-- for password -->
       <label for="password">Password</label>
       <input
-        id="username"
+        id="password"
         v-model="password"
         type="password"
-        placeholder="enter your password"
+        placeholder="🧪 🎛️ 📝 ❤️ ☎️ 💡"
         :aria-label="password"
-        :aria-invalid="!!formErrors.username"
+        :aria-invalid="!!formErrors.password"
+        autocomplete="current-password"
       />
       <span class="error" v-if="formErrors.password">{{ formErrors.password }}</span>
 
