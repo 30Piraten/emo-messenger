@@ -18,40 +18,40 @@ const currentUser = authStore.user
 const fetchUsers = async () => {
   if (!currentUser) return;
 
-  const q = query(
-    collection(firestoreDb, "users"),
-    where("uid", "!=", currentUser.uid)
-  );
+  // made changes here
+    try{
+      const q = query(
+        collection(firestoreDb, "users"),
+        where("uid", "!=", currentUser.uid)
+      );
 
-  onSnapshot(q, (snapshot) =>{
-    users.value = snapshot.docs.map(doc => doc.data());
-    loading.value = false;
-  });
-};
+      onSnapshot(q, (snapshot) =>{
+        users.value = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        loading.value = false;
+      });
+    } catch(err) {
+      console.error("failed to list users:", err)
+      loading.value = false;
+    }
+  }
 
 onMounted(() => {
   fetchUsers();
 })
 
-onMounted(async () => {
- const q = query(collection(firestoreDb, "users"));
- onSnapshot(q, (snapshot) => {
-  users.value = snapshot.docs
-    .map((doc) => doc.data() as UserProfile)
-    .filter((u) => currentUser && u.uid !== currentUser.uid)
- })
-});
-
 const getInitials = (email: string) => {
   return email ? email.slice(0, 3).toUpperCase() : "😒";
 };
 
-const goToChat = (uid: string) => {
-  router.push(`/chat/${uid}`);
-};
+// const goToChat = (uid: string) => {
+//   router.push(`/chat/${uid}`);
+// };
 
-const startChat = (userId: string) => {
-  router.push(`/chat/${userId}`);
+const startChat = (user: any) => {
+  router.push(`/chat/${user.uid}`);
 };
 
 const handleLogout = async () => {
@@ -64,17 +64,17 @@ const handleLogout = async () => {
   <div class="user-container">
     <h1 class="user-header">Users</h1>
 
+    <!-- can add goToChat(user.uid) in li if needed -->
     <p v-if="loading">Loading users...</p>
     <ul v-else class="user-list">
       <li
         v-for="user in users"
         :key="user.id"
         class="user-list-item"
-        @click="goToChat(user.uid)"
       >
       <span class="avatar">{{ getInitials(user.email) }}</span>
       <span class="status" :class="user.online ? 'online' : 'offline'"> ● </span>
-      <span>{{ user.displayName }}</span> <button @click="startChat(user)">Chat</button>
+      <span>{{ user.displayName  || user.email }}</span> <button @click="startChat(user)">Start Chat</button>
     </li>
     </ul>
 

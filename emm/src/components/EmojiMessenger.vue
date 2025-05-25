@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch, computed } from "vue";
 import { useAuthStore } from "@/stores/authStore";
 import { useRouter, useRoute } from "vue-router";
 import dayjs from "dayjs";
@@ -8,6 +8,9 @@ dayjs.extend(relativeTime);
 
 import { collection, addDoc, serverTimestamp, Timestamp, onSnapshot, query, orderBy, where } from "firebase/firestore";
 import { firestoreDb } from "@/firebase";
+
+// props definition
+const props = defineProps<{ recipientId: string }>();
 
 // local state
 const newMessage = ref("");
@@ -31,15 +34,14 @@ const router = useRouter();
 const authStore = useAuthStore();
 
 const currentUser = authStore.user;
-const recipientId = route.params.recipientId as string;
 
-const displayName = currentUser?.email ? currentUser.email.split("@")[0] : "😒";
+console.log("Recipient ID:", props.recipientId);
 
 // Firestore listeners
 let unsubscribe: (() => void) | null = null;
 
 const loadMessages = () => {
-  if (!currentUser || !recipientId) return;
+  if (!currentUser || !props.recipientId) return;
 
   const messageRef = collection(firestoreDb, "messages");
   const q = query(
@@ -53,8 +55,9 @@ const loadMessages = () => {
       .map((doc) => ({ id: doc.id, ...doc.data() } as Message ))
       // filter only msgs between these two users
       .filter((msg) =>
+        Array.isArray(msg.participants) &&
         msg.participants.includes(currentUser.uid) &&
-        msg.participants.includes(recipientId)
+        msg.participants.includes(props.recipientId)
       );
   })
 }
@@ -62,10 +65,11 @@ const loadMessages = () => {
 onMounted(() => loadMessages());
 onUnmounted(() => unsubscribe?.());
 
-watch(() => route.params.uid, () => {
-  recipientId
-  unsubscribe?.();
-  loadMessages();
+watch(() => route.params.recipientId, (newId, oldId) => {
+  if (newId !== oldId) {
+    unsubscribe?.();
+    loadMessages();
+  }
 });
 
 // handle message send
@@ -77,8 +81,8 @@ const sendMessage = async () => {
   try{
     await addDoc(collection(firestoreDb, "messages"), {
       senderId: currentUser.uid,
-      recipientId,
-      participants: [currentUser.uid, recipientId],
+      recipientId: props.recipientId,
+      participants: [currentUser.uid, props.recipientId],
       content: newMessage.value.trim(),
       timestamp: serverTimestamp(),
       readBy: [currentUser.uid] // mark sender as read
@@ -100,8 +104,8 @@ const leaveChat = () => {
 
 <template>
   <div class="messenger">
-    <h2>Private Chat 👾</h2>
-    <p>Talking to: <code>{{ displayName }}</code></p>
+    <h2>Emo Chat 👾</h2>
+    <p>Talking to: <code>{{ recipientId }}</code></p>
 
     <div class="messages">
       <div

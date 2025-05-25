@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { auth, firestoreDb } from "@/firebase";
-import  { doc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore"
+import  { doc, serverTimestamp, setDoc } from "firebase/firestore"
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import type { User } from "firebase/auth";
 import router from "@/router/route";
@@ -31,20 +31,26 @@ export const useAuthStore = defineStore("auth", () => {
   const clearUser = () => {
     user.value = null;
   }
-  const logout = async () => {
+  //line 38 -
+    const logout = async () => {
     const currentUser = auth.currentUser;
 
     if (currentUser) {
-      await updateDoc(doc(firestoreDb, "users", currentUser.uid), {
-        online: false,
-        lastSeen: serverTimestamp(),
-      });
+      await setDoc(
+        doc(firestoreDb, "users", currentUser.uid),
+        {
+          online: false,
+          lastSeen: serverTimestamp(),
+        },
+        { merge: true }
+      );
     }
 
     await signOut(auth);
-    router.push("/")
+    router.push("/");
     clearUser();
-  }
+  };
+  // line end
 
   return { user, setUser, clearUser, logout, isAuthResolved};
 });
