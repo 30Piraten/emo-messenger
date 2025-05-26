@@ -16,7 +16,7 @@ const routes = [
     path: "/users",
     name: "Users",
     component: OnlineUsers,
-    meta: { requiresAuth: false }
+    meta: { requiresAuth: true } // Changed to true - users should be logged in to see other users
   },
   {
     path: "/chat/:recipientId",
@@ -24,6 +24,11 @@ const routes = [
     component: EmojiMessenger,
     props: true,
     meta: { requiresAuth: true }
+  },
+  // Redirect root to users if authenticated
+  {
+    path: "/dashboard",
+    redirect: "/users"
   }
 ];
 
@@ -32,31 +37,36 @@ const router = createRouter({
   routes
 });
 
-// navigation guard
-router.beforeEach(async ( to, from, next ) => {
+// Enhanced navigation guard
+router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
 
-  // wait for Forebase auth to resolve
+  // Wait for Firebase auth to resolve
   if (!authStore.isAuthResolved) {
-    // wait for auth state to be resolved
-    await new Promise((resolve) => {
+  await Promise.race([
+    new Promise((resolve) => {
       const unwatch = authStore.$subscribe(() => {
         if (authStore.isAuthResolved) {
           unwatch();
           resolve(true);
         }
       });
-    });
-  }
+    }),
+    new Promise((resolve) => setTimeout(resolve, 5000)) // fallback in case of error
+  ]);
+}
 
   const isLoggedIn = !!authStore.user;
 
-  // add first: && !authStore.user
+  // Handle authentication requirements
   if (to.meta.requiresAuth && !isLoggedIn) {
-    next({ name: "Home" })
+    next({ name: "Home" });
+  } else if (to.name === "Home" && isLoggedIn) {
+    // Redirect logged-in users away from login page
+    next({ name: "Users" });
   } else {
-    next()
+    next();
   }
-})
+});
 
-export default router
+export default router;

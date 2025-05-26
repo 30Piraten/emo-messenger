@@ -17,9 +17,16 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@dotenvx/dotenvx": "^1.44.1",
     "@passwordless-id/webauthn": "^2.3.0",
     "@vee-validate/zod": "^4.15.0",
     "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.2",
+    "dayjs": "^1.11.13",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "firebase": "^11.8.1",
+    "firebase-tools": "^14.4.0",
     "jazz-browser": "^0.14.9",
     "jazz-tools": "^0.14.9",
     "jazz-vue": "^0.14.9",
@@ -27,6 +34,7 @@
     "uuid": "^11.1.0",
     "vee-validate": "^4.15.0",
     "vue": "^3.5.13",
+    "vue-router": "^4.5.1",
     "zod": "^3.25.23"
   },
   "devDependencies": {
