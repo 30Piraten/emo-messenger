@@ -7,13 +7,14 @@ import type { User } from "firebase/auth";
 import router from "@/router/route";
 
 export const useAuthStore = defineStore("auth", () => {
-  const user = ref<null | { uid: string; email: string | null }>(null);
+  const user = ref<null | { uid: string; email: string | null; displayName?: string }>(null);
   const isAuthResolved = ref(false);
 
   // Sync with Firebase Auth
   onAuthStateChanged(auth, (firebaseUser) => {
     if (firebaseUser) {
       setUser(firebaseUser);
+      setUserOnline(firebaseUser.uid);
     } else {
       clearUser();
     }
@@ -22,37 +23,80 @@ export const useAuthStore = defineStore("auth", () => {
       isAuthResolved.value = true;
     }
   });
-  const setUser = (firebasuser: User) => {
+
+  const setUser = (firebaseuser: User) => {
+    const email = firebaseuser.email || "";
     user.value = {
-      uid: firebasuser.uid,
-      email: firebasuser.email,
+      uid: firebaseuser.uid,
+      email: firebaseuser.email,
+      displayName: email.split("@")[0],
     };
   };
   const clearUser = () => {
     user.value = null;
   }
-  //line 38 -
-    const logout = async () => {
-    const currentUser = auth.currentUser;
 
-    if (currentUser) {
+  // set user online status
+  const setUserOnline = async (uid: string) => {
+    try {
       await setDoc(
-        doc(firestoreDb, "users", currentUser.uid),
+        doc(firestoreDb, "users", uid),
+        {
+          online: true,
+          lastSeen: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      // set up offline detection
+      window.addEventListener("beforeunload", () => setUserOnline(uid));
+
+      // also handle tab visibility change
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+          setOfflineUser(uid);
+        } else {
+          setUserOnline(uid);
+        }
+      });
+    } catch(err) {
+      console.error("failed to set user online", err)
+    }
+  }
+
+  // set offline user
+  const setOfflineUser = async (uid: string) => {
+    try {
+      await setDoc(
+        doc(firestoreDb, "users", uid),
         {
           online: false,
           lastSeen: serverTimestamp(),
         },
         { merge: true }
       );
+    } catch(err) {
+      console.error("failed to set user offline", err)
     }
+  }
 
-    await signOut(auth);
-    router.push("/");
-    clearUser();
+  const logout = async () => {
+    const currentUser = auth.currentUser;
+
+    try {
+      if (currentUser) {
+        await setOfflineUser(currentUser.uid)
+      }
+      await signOut(auth);
+      router.push("/");
+      clearUser();
+
+    } catch(err) {
+      console.error("logout failed", err)
+    }
   };
-  // line end
 
-  return { user, setUser, clearUser, logout, isAuthResolved};
+  return { user, setUser, clearUser, logout, isAuthResolved, setUserOnline, setOfflineUser};
 });
 
 // persist and cache data to Firestore
@@ -66,7 +110,9 @@ export const saveUserProfile = async (uid: string, email: string ) => {
         uid,
         email,
         displayName,
-        createdAt: serverTimestamp()
+        online: true,
+        createdAt: serverTimestamp(),
+        lastSeen: serverTimestamp(),
       },
       { merge: true }
     );
