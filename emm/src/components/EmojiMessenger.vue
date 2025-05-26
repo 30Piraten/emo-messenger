@@ -50,8 +50,6 @@ const router = useRouter();
 const authStore = useAuthStore();
 const currentUser = authStore.user;
 
-console.log("Recipient ID from props:", props.recipientId);
-
 // Firestore listeners
 let messagesUnsubscribe: (() => void) | null = null;
 let recipientUnsubscribe: (() => void) | null = null;
@@ -157,7 +155,6 @@ const formatDateHeader = (dateStr: string) => {
 };
 
 onMounted(() => {
-  console.log("Component mounted with recipientId:", props.recipientId);
   loadRecipientInfo();
   loadMessages();
 });
